@@ -2,7 +2,7 @@ name: trans_prism
 description: "稳态光盒 (Trans Prism) - 一站式 HRT 用药提醒与离线知识库终端"
 publish_to: 'none'
 
-version: 1.6.2+0
+version: 1.6.3+0
 
 environment:
   sdk: '>=3.6.2 <4.0.0'
@@ -36,6 +36,10 @@ dependencies:
   http: ^1.6.0
   webview_flutter: ^4.8.0
   url_launcher: ^6.2.6
+  # 竞速结果本地加密存储（不上传，纯本地）
+  flutter_secure_storage: ^9.2.2
+  # 网络环境指纹（本地 IP 哈希，隐私安全）
+  crypto: ^3.0.3
   
   # --- 系统功能与工具 ---
   flutter_local_notifications: ^17.2.3

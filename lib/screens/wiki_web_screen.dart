@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import '../models/wiki_config.dart';
+import '../services/wiki_race_service.dart';
 import '../services/wiki_sync_service.dart';
 import '../widgets/loading_indicator.dart';
 
@@ -38,6 +41,13 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
       final snapshot = await _sync.resolveForOpen(widget.wikiId);
       final preferLocal = snapshot.strategy == WikiCacheStrategy.preferLocal;
 
+      // ── 竞速模式：mtf / miomtf 同时探测 chengxi.moe 镜像与官方源，
+      //    哪个先打开就访问哪个（对抗 GFW 干扰）；其余 wiki 直接用官方源。
+      final targetUrl = await WikiRaceService.instance
+          .resolveBestUrl(widget.wikiId, config.webUrl);
+      debugPrint('[${widget.wikiId}] WikiWebScreen 实际加载: $targetUrl');
+      if (!mounted) return;
+
       late final PlatformWebViewControllerCreationParams params;
       if (WebViewPlatform.instance is WebKitWebViewPlatform) {
         params = WebKitWebViewControllerCreationParams(
@@ -55,6 +65,8 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
             onWebResourceError: (error) {
               if (!mounted) return;
               if (error.isForMainFrame != true) return;
+              // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
+              unawaited(WikiRaceService.instance.invalidate(widget.wikiId));
               setState(() {
                 _errorMessage = error.description;
               });
@@ -63,7 +75,7 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
         );
 
       await controller.loadRequest(
-        Uri.parse(config.webUrl),
+        Uri.parse(targetUrl),
         headers: preferLocal ? const {} : const {'Cache-Control': 'no-cache'},
       );
 
@@ -95,8 +107,12 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
     if (controller == null) return;
 
     setState(() => _errorMessage = null);
+    // 重试时重新竞速：优先 chengxi.moe 镜像，官方源兜底
+    final targetUrl = await WikiRaceService.instance
+        .resolveBestUrl(widget.wikiId, config.webUrl);
+    if (!mounted || controller != _controller) return;
     await controller.loadRequest(
-      Uri.parse(config.webUrl),
+      Uri.parse(targetUrl),
       headers: const {'Cache-Control': 'no-cache'},
     );
   }

@@ -1,8 +1,13 @@
 allprojects {
     repositories {
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        maven { url 'https://maven.aliyun.com/repository/public' }
+        // 官方源优先（直连稳定）；阿里云镜像作为 fallback（国内网络可自行恢复）
+        google()
+        mavenCentral()
+
+        // 阿里云镜像：代理关闭时 TLS 握手常失败，默认注释以防拖慢构建
+        // maven { url 'https://maven.aliyun.com/repository/google' }
+        // maven { url 'https://maven.aliyun.com/repository/central' }
+        // maven { url 'https://maven.aliyun.com/repository/public' }
     }
 }
 

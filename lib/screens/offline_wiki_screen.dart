@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -6,6 +7,7 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_static/shelf_static.dart';
 
 import '../services/wiki_offline_service.dart';
+import '../services/wiki_race_service.dart';
 
 /// 统一的在线/离线双模 Wiki 阅读器
 ///
@@ -242,7 +244,7 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
     return widget.localIndexPath;
   }
 
-  /// 初始化在线模式：WebView 直接加载 URL
+  /// 初始化在线模式：WebView 直接加载 URL（竞速模式：镜像 vs 官方源，先开者胜）
   Future<void> _initOnlineMode() async {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -251,6 +253,8 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
           onWebResourceError: (error) {
             if (!mounted) return;
             if (error.isForMainFrame != true) return;
+            // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
+            unawaited(WikiRaceService.instance.invalidate(widget.wikiType));
             setState(() {
               _errorMessage = error.description;
             });
@@ -258,7 +262,14 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
         ),
       );
 
-    await controller.loadRequest(Uri.parse(widget.onlineUrl));
+    // ── 竞速模式：mtf / miomtfwiki 同时探测 chengxi.moe 镜像与官方源，
+    //    哪个先打开就访问哪个（对抗 GFW 干扰）；其余 wiki 直接用在线地址。
+    final targetUrl = await WikiRaceService.instance
+        .resolveBestUrl(widget.wikiType, widget.onlineUrl);
+    debugPrint('[${widget.wikiType}] 在线模式实际加载: $targetUrl');
+    if (!mounted) return;
+
+    await controller.loadRequest(Uri.parse(targetUrl));
 
     if (!mounted) return;
     setState(() {
