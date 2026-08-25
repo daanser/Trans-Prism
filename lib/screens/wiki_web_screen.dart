@@ -8,6 +8,7 @@ import '../models/wiki_config.dart';
 import '../services/wiki_race_service.dart';
 import '../services/wiki_sync_service.dart';
 import '../widgets/loading_indicator.dart';
+import '../widgets/wiki_browser_bar.dart';
 
 /// 内嵌完整 Wiki 站点（与 Next-MtF-wiki 部署的在线版一致）
 class WikiWebScreen extends StatefulWidget {
@@ -29,6 +30,11 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
   WebViewController? _controller;
   bool _isInitializing = true;
   String? _errorMessage;
+
+  /// 浏览器式底栏可后退 / 可前进状态
+  bool _canGoBack = false;
+  bool _canGoForward = false;
+
   @override
   void initState() {
     super.initState();
@@ -58,21 +64,8 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
       }
 
       final controller = WebViewController.fromPlatformCreationParams(params)
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setNavigationDelegate(
-          NavigationDelegate(
-            onPageFinished: (_) => _onPageFinished(snapshot),
-            onWebResourceError: (error) {
-              if (!mounted) return;
-              if (error.isForMainFrame != true) return;
-              // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
-              unawaited(WikiRaceService.instance.invalidate(widget.wikiId));
-              setState(() {
-                _errorMessage = error.description;
-              });
-            },
-          ),
-        );
+        ..setJavaScriptMode(JavaScriptMode.unrestricted);
+      _attachNavDelegate(controller, snapshot);
 
       await controller.loadRequest(
         Uri.parse(targetUrl),
@@ -101,6 +94,46 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
     }
   }
 
+  /// 同步浏览器式底栏的可后退 / 可前进状态
+  Future<void> _syncNavState(WebViewController controller) async {
+    if (!mounted) return;
+    final back = await controller.canGoBack();
+    final forward = await controller.canGoForward();
+    if (!mounted) return;
+    if (back != _canGoBack || forward != _canGoForward) {
+      setState(() {
+        _canGoBack = back;
+        _canGoForward = forward;
+      });
+    }
+  }
+
+  /// 为 WebView 挂载统一导航委托（同步底栏状态；主框架失败清竞速缓存）
+  void _attachNavDelegate(
+    WebViewController controller,
+    WikiSyncSnapshot snapshot,
+  ) {
+    controller.setNavigationDelegate(
+      NavigationDelegate(
+        onPageStarted: (_) => _syncNavState(controller),
+        onPageFinished: (_) {
+          _onPageFinished(snapshot);
+          _syncNavState(controller);
+        },
+        onWebResourceError: (error) {
+          if (!mounted) return;
+          if (error.isForMainFrame != true) return;
+          // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
+          unawaited(WikiRaceService.instance.invalidate(widget.wikiId));
+          _syncNavState(controller);
+          setState(() {
+            _errorMessage = error.description;
+          });
+        },
+      ),
+    );
+  }
+
   Future<void> _retryWithNetwork() async {
     final config = WikiCatalog.require(widget.wikiId);
     final controller = _controller;
@@ -122,26 +155,15 @@ class _WikiWebScreenState extends State<WikiWebScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-        actions: [
-          if (_controller != null)
-            IconButton(
-              tooltip: '后退',
-              onPressed: () async {
-                if (await _controller!.canGoBack()) {
-                  await _controller!.goBack();
-                }
-              },
-              icon: const Icon(Icons.arrow_back),
-            ),
-          if (_controller != null)
-            IconButton(
-              tooltip: '刷新',
-              onPressed: () => _controller!.reload(),
-              icon: const Icon(Icons.refresh),
-            ),
-        ],
+        // 页面内导航（后退/前进）统一在底部浏览器式细条，右上角不放
       ),
       body: _buildBody(),
+      // ── 浏览器式底部导航细条：后退 / 刷新 / 前进 ──
+      bottomNavigationBar: WikiBrowserBar(
+        controller: _controller,
+        canGoBack: _canGoBack,
+        canGoForward: _canGoForward,
+      ),
     );
   }
 

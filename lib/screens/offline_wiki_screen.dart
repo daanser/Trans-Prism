@@ -8,6 +8,7 @@ import 'package:shelf_static/shelf_static.dart';
 
 import '../services/wiki_offline_service.dart';
 import '../services/wiki_race_service.dart';
+import '../widgets/wiki_browser_bar.dart';
 
 /// 统一的在线/离线双模 Wiki 阅读器
 ///
@@ -50,6 +51,10 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
   bool _isOfflineMode = false;
   HttpServer? _localServer;
   String? _errorMessage;
+
+  /// 浏览器式底栏可后退 / 可前进状态
+  bool _canGoBack = false;
+  bool _canGoForward = false;
 
   /// 各 wiki 的本地服务器端口
   int get _port {
@@ -197,6 +202,7 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..loadRequest(Uri.parse('http://localhost:$_port$effectiveIndexPath'));
+    _attachNavDelegate(controller);
 
     if (!mounted) return;
     setState(() {
@@ -247,20 +253,8 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
   /// 初始化在线模式：WebView 直接加载 URL（竞速模式：镜像 vs 官方源，先开者胜）
   Future<void> _initOnlineMode() async {
     final controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onWebResourceError: (error) {
-            if (!mounted) return;
-            if (error.isForMainFrame != true) return;
-            // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
-            unawaited(WikiRaceService.instance.invalidate(widget.wikiType));
-            setState(() {
-              _errorMessage = error.description;
-            });
-          },
-        ),
-      );
+      ..setJavaScriptMode(JavaScriptMode.unrestricted);
+    _attachNavDelegate(controller);
 
     // ── 竞速模式：mtf / miomtfwiki 同时探测 chengxi.moe 镜像与官方源，
     //    哪个先打开就访问哪个（对抗 GFW 干扰）；其余 wiki 直接用在线地址。
@@ -279,6 +273,40 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
     });
   }
 
+  /// 同步浏览器式底栏的可后退 / 可前进状态
+  Future<void> _syncNavState(WebViewController controller) async {
+    if (!mounted) return;
+    final back = await controller.canGoBack();
+    final forward = await controller.canGoForward();
+    if (!mounted) return;
+    if (back != _canGoBack || forward != _canGoForward) {
+      setState(() {
+        _canGoBack = back;
+        _canGoForward = forward;
+      });
+    }
+  }
+
+  /// 为 WebView 挂载统一导航委托（同步底栏状态；主框架失败清竞速缓存）
+  void _attachNavDelegate(WebViewController controller) {
+    controller.setNavigationDelegate(
+      NavigationDelegate(
+        onPageStarted: (_) => _syncNavState(controller),
+        onPageFinished: (_) => _syncNavState(controller),
+        onWebResourceError: (error) {
+          if (!mounted) return;
+          if (error.isForMainFrame != true) return;
+          // 主框架加载失败：清除竞速缓存，重试时重新探测换入口
+          unawaited(WikiRaceService.instance.invalidate(widget.wikiType));
+          _syncNavState(controller);
+          setState(() {
+            _errorMessage = error.description;
+          });
+        },
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _localServer?.close(force: true);
@@ -294,26 +322,15 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isOfflineMode ? '${widget.title} (离线版)' : widget.title),
-        actions: [
-          if (_controller != null)
-            IconButton(
-              tooltip: '后退',
-              onPressed: () async {
-                if (await _controller!.canGoBack()) {
-                  await _controller!.goBack();
-                }
-              },
-              icon: const Icon(Icons.arrow_back),
-            ),
-          if (_controller != null)
-            IconButton(
-              tooltip: '刷新',
-              onPressed: () => _controller!.reload(),
-              icon: const Icon(Icons.refresh),
-            ),
-        ],
+        // 页面内导航（后退/前进）统一在底部浏览器式细条，右上角不放
       ),
       body: _buildBody(),
+      // ── 浏览器式底部导航细条：后退 / 刷新 / 前进 ──
+      bottomNavigationBar: WikiBrowserBar(
+        controller: _controller,
+        canGoBack: _canGoBack,
+        canGoForward: _canGoForward,
+      ),
     );
   }
 
