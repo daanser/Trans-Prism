@@ -117,7 +117,7 @@
 | [`main.dart:782`](lib/main.dart:782) | `MainDashboard`：`IndexedStack` 承载 4 个 Tab |
 | [`main.dart:1176`](lib/main.dart:1176) | `HomeTab`：首页模块容器（问候语 + HRT + 工具箱 + 声音训练），模块可见性由 SP 控制 |
 | [`main.dart:1893`](lib/main.dart:1893) | `ProfileTab`（我的）：身份与资料 / 外观与显示 / **高级**（通知权限与保活、数据导出与恢复、**血药浓度模拟端口**）/ **系统**（关于与支持、**相关链接**、**检查更新**、**再次进入向导**）。所有设置项经 [`_buildSettingsTile`](lib/main.dart:2270) 渲染且**统一无副标题**（`subtitle` 一律为 `null`）；端口设置弹层 [`_showTrackerPortSheet`](lib/main.dart:2964)（智能/自定义 + 修改确认，变更端口会改变 SPA origin，须先内置导出备份；配置**重启应用后生效**）；「再次进入向导」经 `Navigator.push` 重跑 `OnboardingWizard`，完成后 pop 回主界面 |
-| [`main.dart:1966`](lib/main.dart:1966) | `_handleCheckUpdate`：手动检查更新入口（SnackBar「正在检查更新…」→ `UpdateService.checkForUpdate()` → 新版本弹 `UpdateDialog` / 网络错误 / 已是最新 三态） |
+| [`main.dart:1966`](lib/main.dart:1966) | `_handleCheckUpdate`：手动检查更新入口（SnackBar「正在检查更新…」→ `UpdateService.checkForUpdate()` → 新版本弹 `UpdateDialog`（含 `release_notes` 更新内容，源字段为 `latest.json` 的**可选** `release_notes`）/ 网络错误 / 已是最新 三态） |
 | [`onboarding_wizard.dart`](lib/screens/onboarding/onboarding_wizard.dart:1) | `OnboardingWizard` 初始化引导：欢迎 → 权限 → 性别/主题/称呼 → **使用须知（免责声明，须勾选同意）** → 完成。**「跳过」仅跳转到使用须知步骤（接受默认选择，不自动同意免责）**——必须勾选同意后才能完成进入主界面。启动场景由 `AppRootController` 在 `onboarding_completed` 缺失时展示；「我的 → 系统 → 再次进入向导」可手动重跑（`onCompleted` 后 pop） |
 | [`links_screen.dart`](lib/screens/links_screen.dart:1) | `LinksScreen`（相关链接二级页）：「我的 → 系统 → 相关链接」进入，集中展示外部链接（官网 `transprism.chengxi.moe` / GitHub `github.com/Trans-Prism/Trans-Prism`），经 `url_launcher` `LaunchMode.externalApplication` 跳系统浏览器。纯静态 UI，App 内零网络请求、不经 R2 / `DnsSafeNetworkService`，无持久化 / 状态管理 / 新依赖；双模自适应（GlassSurface） |
 
@@ -216,7 +216,7 @@
    - **🔐 计算 APK SHA-256 校验和**：遍历所有 `.apk` 文件，用 `sha256sum` 计算哈希值，生成 `${apk}.sha256` 文件，通过 `gh release upload` 上传回 GitHub Release
    - 归档到 R2 `/app/releases/{tag}/`
    - 清理 R2 `/app/latest/` 下的旧版 APK
-   - 生成 `latest.json`（含 `latest_file` / `tag` / `update_time`）
+   - 生成 `latest.json`（含 `latest_file` / `tag` / `update_time` / **可选** `release_notes`——GitHub Release body 更新内容，客户端 [`UpdateService`](lib/services/update_service.dart:53) 解析后由 [`UpdateDialog`](lib/widgets/update_dialog.dart:8) 展示）
    - 同步到 R2 `/app/latest/`
 3. `🧹 清理 R2 历史版本` — 仅保留最近 5 个 Release 在 R2 上
 

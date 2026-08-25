@@ -78,7 +78,17 @@ jobs:
           APK_FILENAME=$(ls release_assets | grep .apk | head -n 1)
           if [ -n "$APK_FILENAME" ]; then
             echo "生成版本索引文件 latest.json..."
-            echo "{\"latest_file\": \"$APK_FILENAME\", \"tag\": \"$TARGET_TAG\", \"update_time\": \"$(date -u +'%Y-%m-%dT%H:%M:%SZ')\"}" > release_assets/latest.json
+            # 从 GitHub Release 拉取更新内容（Release body），注入 latest.json 的 release_notes 字段。
+            # body 经 base64 传递规避引号/换行/`$`/反引号等 shell 特殊字符，jq 负责 JSON 转义与可选字段。
+            RELEASE_BODY_B64=$(gh api "repos/${{ github.repository }}/releases/tags/$TARGET_TAG" --jq '.body // ""' 2>/dev/null | base64 -w0 || true)
+            jq -n \
+              --arg latest_file "$APK_FILENAME" \
+              --arg tag "$TARGET_TAG" \
+              --arg update_time "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+              --arg notes_b64 "$RELEASE_BODY_B64" \
+              '{latest_file: $latest_file, tag: $tag, update_time: $update_time} + (if $notes_b64 == "" then {} else {release_notes: ($notes_b64 | @base64d)} end)' \
+              > release_assets/latest.json
+            echo "✅ latest.json 已生成: $APK_FILENAME @ $TARGET_TAG"
           else
             echo "⚠️ 警告：当前 Release 中没有找到 .apk 文件！"
           fi

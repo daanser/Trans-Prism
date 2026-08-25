@@ -44,11 +44,14 @@ class UpdateCheckResult {
 /// {
 ///   "latest_file": "TransPrism_v1.3.1_Beta.apk",
 ///   "tag": "v1.3.1-beta.1",
-///   "update_time": "2026-06-24T03:04:54Z"
+///   "update_time": "2026-06-24T03:04:54Z",
+///   "release_notes": "…（可选）GitHub Release 更新内容"
 /// }
 /// ```
 ///
-/// 文件名中的版本号通过正则提取：
+/// - `release_notes` 为**可选字段**：旧契约缺失时返回 null，
+///   [`UpdateDialog`](widgets/update_dialog.dart:8) 退化为默认文案。
+/// - 文件名中的版本号通过正则提取：
 /// - APK: `TransPrism_v1.3.1_Beta.apk` → 版本 `1.3.1`
 class UpdateService {
   /// API 请求超时
@@ -101,7 +104,7 @@ class UpdateService {
       return UpdateCheckResult(
         hasUpdate: true,
         latestVersion: displayVersion,
-        releaseNotes: null,
+        releaseNotes: remote.releaseNotes,
         downloadUrl: downloadUrl,
         latestFile: remote.latestFile,
       );
@@ -246,9 +249,16 @@ class UpdateService {
         return null;
       }
 
+      // 可选字段：GitHub Release 更新内容（旧契约无此字段时保持 null）
+      final rawNotes = json['release_notes'] as String?;
+      final releaseNotes = (rawNotes == null || rawNotes.trim().isEmpty)
+          ? null
+          : rawNotes.trim();
+
       return _R2LatestJson(
         latestFile: latestFile,
         tag: tag,
+        releaseNotes: releaseNotes,
       );
     } on FormatException catch (e) {
       debugPrint('🚨 JSON 解析异常: $e');
@@ -347,15 +357,20 @@ class UpdateService {
 /// {
 ///   "latest_file": "TransPrism_v1.3.1_Beta.apk",
 ///   "tag": "v1.3.1-beta.1",
-///   "update_time": "2026-06-24T03:04:54Z"
+///   "update_time": "2026-06-24T03:04:54Z",
+///   "release_notes": "…（可选）GitHub Release 更新内容"
 /// }
 /// ```
 class _R2LatestJson {
   final String latestFile;
   final String tag;
 
+  /// GitHub Release 更新内容（可选，旧契约可能缺失）
+  final String? releaseNotes;
+
   const _R2LatestJson({
     required this.latestFile,
     required this.tag,
+    this.releaseNotes,
   });
 }
