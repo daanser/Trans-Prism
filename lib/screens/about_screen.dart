@@ -241,6 +241,21 @@ class _AboutScreenState extends State<AboutScreen> {
           ),
           _buildLicenseCard(
             context,
+            icon: Icons.palette_outlined,
+            title: '@project-trans/vitepress-theme-project-trans',
+            license: 'MIT',
+            copyright: 'Project Trans',
+            url: 'https://github.com/project-trans/vitepress-theme-project-trans',
+            description:
+                '优雅的 VitePress 知识库主题，采用 MIT 许可证。用于 MtF.Wiki、FtM.Wiki、RLE.Wiki 等 VitePress 离线知识库的排版呈现与构建。',
+            isDark: isDark,
+            cardBg: cardBg,
+            cardBorderColor: cardBorderColor,
+            textColor: textColor,
+            secondaryTextColor: secondaryTextColor,
+          ),
+          _buildLicenseCard(
+            context,
             icon: Icons.auto_stories,
             title: 'MioMtFWiki（社区驱动的跨性别知识项目）',
             license: 'CC BY-ND 4.0',

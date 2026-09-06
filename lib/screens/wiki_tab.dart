@@ -65,7 +65,7 @@ class _WikiTabState extends State<WikiTab> {
     ),
     'MioMtFWiki': (
       'miomtfwiki',
-      'miomtfwiki-wiki-site',
+      'miomtfwiki-site',
       '/index.html',
       'https://kitsumio.github.io/MioMtFWiki/',
     ),

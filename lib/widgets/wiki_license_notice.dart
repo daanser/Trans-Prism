@@ -139,6 +139,34 @@ class _WikiLicenseNoticeState extends State<WikiLicenseNotice> {
                   height: 1.55,
                   color: isDark ? Colors.grey.shade400 : Colors.grey.shade700),
             ),
+            const SizedBox(height: 4),
+            RichText(
+              text: TextSpan(
+                style: TextStyle(
+                    fontSize: 13,
+                    height: 1.55,
+                    color:
+                        isDark ? Colors.grey.shade400 : Colors.grey.shade700),
+                children: [
+                  const TextSpan(text: '• '),
+                  TextSpan(
+                    text: '@project-trans/vitepress-theme-project-trans',
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFFF5A9B8) : Colors.blue,
+                      decoration: TextDecoration.underline,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () {
+                        launchUrl(Uri.parse(
+                            'https://github.com/project-trans/vitepress-theme-project-trans'));
+                      },
+                  ),
+                  const TextSpan(
+                    text: ' — 优雅的 VitePress 知识库主题（MIT 许可）。',
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 12),
             RichText(
               text: TextSpan(

@@ -163,6 +163,21 @@ class _OfflineWikiScreenState extends State<OfflineWikiScreen> {
               headers: {'content-type': 'text/html; charset=utf-8'});
         }
 
+        // VitePress Clean URLs 抢救适配：
+        // 1) 尝试 $path.html（如 /zh-cn/docs/campus -> /zh-cn/docs/campus.html）
+        final cleanHtmlFile = File('$sitePath/$path.html');
+        if (cleanHtmlFile.existsSync()) {
+          return Response.ok(cleanHtmlFile.openRead(),
+              headers: {'content-type': 'text/html; charset=utf-8'});
+        }
+
+        // 2) 尝试 $path/index.html（目录型路由跳转）
+        final dirIndexFile = File('$sitePath/$path/index.html');
+        if (dirIndexFile.existsSync()) {
+          return Response.ok(dirIndexFile.openRead(),
+              headers: {'content-type': 'text/html; charset=utf-8'});
+        }
+
         // 404 调试页面
         final dir = Directory(sitePath);
         String html =

@@ -19,16 +19,16 @@ import 'wiki_offline_service.dart';
 ///
 /// ## 更新检查
 ///
-/// 向 `${BASE_UPDATE_URL}/builder/latest/latest.json` 发起 GET 请求，
+/// 向 `${BASE_UPDATE_URL}/vp-builder/latest/latest.json` 发起 GET 请求，
 /// 获取最新 ZIP 文件名，通过正则萃取日期戳，与本地版本比对。
 ///
 /// ## 下载
 ///
-/// 拼接 `${BASE_UPDATE_URL}/builder/latest/{latest_file}` 直链，
+/// 拼接 `${BASE_UPDATE_URL}/vp-builder/latest/{latest_file}` 直链，
 /// 通过 Dio 流式下载到临时目录，解压后原子交换至文档目录。
 class WikiUpdateManager {
-  final String owner = "daanser";
-  final String repo = "Trans-Prism-Builder";
+  final String owner = "Trans-Prism";
+  final String repo = "New-Trans-Prism-Builder";
 
   static const Duration _timeout = Duration(seconds: 15);
   static const Duration _downloadTimeout = Duration(minutes: 5);
@@ -82,7 +82,7 @@ class WikiUpdateManager {
 
   /// 从 R2 获取指定 wiki 的版本信息 JSON。
   ///
-  /// URL 格式：`{baseUpdateUrl}/builder/latest/{wikiType}_latest.json`
+  /// URL 格式：`{baseUpdateUrl}/vp-builder/latest/{wikiType}_latest.json`
   ///
   /// JSON 格式：
   /// ```json
@@ -94,7 +94,7 @@ class WikiUpdateManager {
   /// ```
   Future<_R2BuilderLatestJson?> _fetchLatestJson(String wikiType) async {
     try {
-      final url = '$baseUpdateUrl/builder/latest/${wikiType}_latest.json';
+      final url = '$baseUpdateUrl/vp-builder/latest/${wikiType}_latest.json';
       debugPrint('[$wikiType] 正在从 R2 获取版本信息 (DoH): $url');
 
       final bodyStr =
@@ -146,7 +146,7 @@ class WikiUpdateManager {
       }
 
       // 4. 拼接下载直链
-      final downloadUrl = '$baseUpdateUrl/builder/latest/${remote.latestFile}';
+      final downloadUrl = '$baseUpdateUrl/vp-builder/latest/${remote.latestFile}';
 
       // 5. 无本地版本 → 需要下载
       if (localVersion == null) {

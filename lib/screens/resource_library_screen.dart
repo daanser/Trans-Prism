@@ -180,6 +180,12 @@ class _WikiListTabState extends State<_WikiListTab> {
       '/index.html',
       'https://rle.wiki/',
     ),
+    'MioMtFWiki': (
+      'miomtfwiki',
+      'miomtfwiki-site',
+      '/index.html',
+      'https://kitsumio.github.io/MioMtFWiki/',
+    ),
   };
 
   static const _prefsWikiHintDismissed = 'wiki_offline_hint_dismissed_forever';

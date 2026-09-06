@@ -16,7 +16,7 @@ import 'update_service.dart' show baseUpdateUrl;
 /// - 从 GitHub Release 下载 version.json → 比对 hash → 下载 ZIP
 ///
 /// **新方案**：
-/// - 从 R2 边缘节点获取 builder/latest/tracker_latest.json → 解析 latest_file →
+/// - 从 R2 边缘节点获取 vp-builder/latest/tracker_latest.json → 解析 latest_file →
 ///   拼接直链下载 ZIP → 原子级目录交换
 ///
 /// ## R2 tracker_latest.json 格式
@@ -56,7 +56,7 @@ class TrackerUpdateService {
       await _recoverFromCrash();
 
       // ── Step 1: 从 R2 获取 tracker 版本信息 ──
-      final latestJsonUrl = '$baseUpdateUrl/builder/latest/tracker_latest.json';
+      final latestJsonUrl = '$baseUpdateUrl/vp-builder/latest/tracker_latest.json';
       debugPrint(
           '[TrackerUpdateService] Checking for updates at $latestJsonUrl...');
 
@@ -89,7 +89,7 @@ class TrackerUpdateService {
       }
 
       // ── Step 2: 拼接直链并下载 ZIP ──
-      final zipUrl = '$baseUpdateUrl/builder/latest/$latestFile';
+      final zipUrl = '$baseUpdateUrl/vp-builder/latest/$latestFile';
       debugPrint(
           '[TrackerUpdateService] New update found. Remote: $tag. Downloading from $zipUrl...');
 
