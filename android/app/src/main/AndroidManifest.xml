@@ -16,6 +16,9 @@
         android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <!-- 用药提醒走 fullScreenIntent（AndroidNotificationDetails.fullScreenIntent=true）。
+         Android 14+ (API 34+) 未声明该权限时，全屏通知会被系统静默降级为普通通知。 -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
     <!-- 提升 Android 14+ 后台存活率 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
@@ -33,6 +36,8 @@
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
@@ -59,6 +64,33 @@
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />
+        <!-- flutter_local_notifications 组件声明（必须由宿主 App 声明）。
+             flutter_local_notifications 17.x 的插件 AndroidManifest 只声明了
+             VIBRATE / POST_NOTIFICATIONS 两个权限，不再自带 Receiver；
+             官方 README「Scheduled notifications」要求宿主 App 自行声明。
+             缺失时：zonedSchedule() 注册闹钟成功（dumpsys alarm 可见），
+             但到点系统广播无组件接收，通知永不弹出（静默失效）。
+             注意 android:exported 必须为 false（与官方示例一致），设为 true
+             无必要且会扩大攻击面。 -->
+        <!-- 闹钟到点接收器：zonedSchedule 的 PendingIntent 目标 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <!-- 开机 / 应用更新后恢复已排程提醒 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+        <!-- 通知按钮（已服药 / 5分钟后提醒）动作接收器 -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

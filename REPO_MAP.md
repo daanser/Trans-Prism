@@ -38,7 +38,7 @@
 | [`medication_stock_summary.dart`](lib/widgets/medication_stock_summary.dart:15) | 首页续航摘要卡片（直读 SP，**绕过 Service**） |
 | [`record_dose_dialog.dart`](lib/widgets/record_dose_dialog.dart:15) | 记录单次给药剂量的对话框 |
 | [`inventory_dashboard_screen.dart`](lib/screens/inventory_dashboard_screen.dart:1) | 库存仪表板全屏页面 |
-| [`notification_service.dart`](lib/services/notification_service.dart:14) | 用药提醒通知调度 |
+| [`notification_service.dart`](lib/services/notification_service.dart:14) | 用药提醒通知调度 + 启动自愈补挂（`restoreMissingSchedules`） |
 | [`medication_profile_repository.dart`](lib/storage/medication_profile_repository.dart:14) | 给药日志 JSON 持久化 |
 
 ### 2. 血药浓度 PK 模拟
@@ -194,6 +194,29 @@
 **根治（已植入）**：[`android/app/build.gradle`](android/app/build.gradle:91) 内置自愈钩子任务 `cleanInvalidResourceNames`——每次构建开始（挂载于所有 `preBuild` 之前）自动递归删除 `build/` 与 `src/main/res` 下所有文件名含空格的副本文件，保证 AAPT2 永远看不到非法资源名。Finder 污染无论何时复发，下次构建都会自动自愈，无需手动删缓存。已实测验证：人为在 `packageDebugResources/drawable/` 放置 `launch_image 2.png` 后 `flutter build apk --debug` 依然成功，污染文件被钩子自动清除（日志输出 `TransPrism 自愈: 删除非法文件名副本 ...`）。
 
 **预防**：勿在 `build/` 目录内使用 Finder 复制/移动文件（Finder 会把副本命名为 `xxx 2.xxx`）；即使误操作，自愈钩子会在下次构建时自动清理。
+
+### 用药锚定提醒到点不触发（release APK 缺少 flutter_local_notifications Receiver 声明）
+
+**症状**：设置「用药锚定提醒」后，到点**无通知、无声音、无振动**，logcat 无任何投递记录；但排程存在（`shared_prefs/scheduled_notifications.xml` 记录完整），`dumpsys alarm` 也能看到 `RTC_WAKEUP` 精确闹钟已入队、target 为 `com.daanser.transprism/com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver`，权限（POST_NOTIFICATIONS / SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM）全部 granted。
+
+**根因**：**不是 manifest 合并或构建流程问题**。`flutter_local_notifications` 17.x 起，插件自身的 `AndroidManifest.xml` 只声明 `VIBRATE` / `POST_NOTIFICATIONS` 两个权限，**不再自带任何 Receiver**；官方 README「Scheduled notifications」要求宿主 App 在 `<application>` 内自行声明三个 Receiver。缺失时 `zonedSchedule()` 注册闹钟依然成功（AlarmManager 不校验目标组件是否存在），但到点系统广播找不到接收组件 → 通知静默失效。三个 Receiver 类始终在 `classes.dex` 中（插件 AAR 已编译），所以「类存在但 manifest 无声明」正是本缺陷特征。
+
+**注意**：模拟器里「手动触发通知」走 `show()` 即时路径，不依赖静态 Receiver 声明，**测不出本缺陷**；必须测「等待闹钟到点自动触发」。
+
+**修复（2026-09-08）**：在 [`android/app/src/main/AndroidManifest.xml`](android/app/src/main/AndroidManifest.xml:67) 的 `<application>` 内补齐：
+- `ScheduledNotificationReceiver`（闹钟到点接收器，`zonedSchedule` 的 PendingIntent 目标）
+- `ScheduledNotificationBootReceiver`（`BOOT_COMPLETED` / `MY_PACKAGE_REPLACED` / `QUICKBOOT_POWERON`，开机与应用更新后由插件 `rescheduleNotifications()` 自动恢复排程）
+- `ActionBroadcastReceiver`（通知按钮「已服药」/「5分钟后提醒」）
+
+`android:exported` 一律为 `false`（与插件官方示例一致；**不要**按网上常见建议改成 `true`，无必要且扩大攻击面）。同时补齐 `USE_FULL_SCREEN_INTENT` 权限与 MainActivity 的 `android:showWhenLocked` / `android:turnScreenOn`——代码里 `AndroidNotificationDetails.fullScreenIntent=true`，Android 14+ 缺该权限会被静默降级为横幅。
+
+**预防 / 验收**：升级 `flutter_local_notifications` 或改动 manifest 后，必须对 **release APK** 验证，而非模拟器手点通知：
+```bash
+aapt2 dump xmltree --file AndroidManifest.xml build/app/outputs/flutter-apk/app-release.apk | grep dexterous
+```
+应列出上述三个 Receiver。
+
+**兜底（已植入）**：部分 OEM（HyperOS / MIUI 等）在进程被清理、强停或省电策略介入时会移除 AlarmManager 中的闹钟且不回调 App。[`NotificationService.restoreMissingSchedules()`](lib/services/notification_service.dart:477) 在每次启动时对账「待处理通知 ID vs 未来到点的启用中药物」，缺失即补挂（`zonedSchedule` 同 ID 覆盖写，幂等），由 [`main.dart`](lib/main.dart:734) `_initNotifications()` 调用。
 
 ---
 

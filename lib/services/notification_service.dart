@@ -81,6 +81,7 @@ class NotificationService {
     final granted = await androidPlugin.requestNotificationsPermission();
     debugPrint('🔍 [TP-Debug] requestNotificationsPermission 结果: $granted');
     await _requestExactAlarmPermission();
+    await _requestFullScreenIntentPermission();
     return granted ?? false;
   }
 
@@ -93,6 +94,24 @@ class NotificationService {
       debugPrint('✅ [TP-Debug] requestExactAlarmsPermission 成功');
     } catch (e) {
       debugPrint('⚠️ [TP-Debug] requestExactAlarmsPermission 异常(非致命): $e');
+    }
+  }
+
+  /// 全屏通知权限（Android 14+ / API 34+）。
+  ///
+  /// 用药提醒使用 fullScreenIntent=true；Android 14 起该能力默认只对闹钟类
+  /// 应用自动授予，其余应用需用户在设置页手动开启，否则通知会被静默降级为
+  /// 横幅（仍有声音+振动，但锁屏不再全屏亮起）。
+  /// Android 13 及以下该方法直接返回 true，不会弹任何界面。
+  Future<void> _requestFullScreenIntentPermission() async {
+    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    if (androidPlugin == null) return;
+    try {
+      final granted = await androidPlugin.requestFullScreenIntentPermission();
+      debugPrint('✅ [TP-Debug] requestFullScreenIntentPermission 结果: $granted');
+    } catch (e) {
+      debugPrint('⚠️ [TP-Debug] requestFullScreenIntentPermission 异常(非致命): $e');
     }
   }
 
@@ -440,5 +459,53 @@ class NotificationService {
     final pending = await _plugin.pendingNotificationRequests();
     debugPrint('🔍 [TP-Debug] 待处理通知数量: ${pending.length}');
     return pending;
+  }
+
+  // ==================== 启动自愈 ====================
+
+  /// 启动自愈：把「应该存在但系统里已经丢失」的用药提醒重新挂上。
+  ///
+  /// 背景：部分 OEM（HyperOS / MIUI 等）在应用进程被清理、被强行停止或
+  /// 省电策略介入时会移除 AlarmManager 中的闹钟，且不会回调通知 App，
+  /// 只能在每次启动时做一次对账。
+  ///
+  /// 判定方式：对每个启用了提醒且 nextDoseTime 仍在未来的药物，检查插件
+  /// 待处理列表里是否还有它的通知 ID；缺失则重新调度。zonedSchedule 为
+  /// 同 ID 覆盖写，因此重复调用是幂等的。
+  ///
+  /// 返回本次补挂的提醒条数。
+  Future<int> restoreMissingSchedules(List<Drug> drugs) async {
+    if (drugs.isEmpty) return 0;
+
+    List<int> pendingIds;
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      pendingIds = pending.map((e) => e.id).toList();
+    } catch (e) {
+      debugPrint('⚠️ [TP-Debug] 读取待处理通知失败，跳过启动自愈: $e');
+      return 0;
+    }
+
+    final now = DateTime.now();
+    var restored = 0;
+    for (final drug in drugs) {
+      if (!drug.reminderEnabled) continue;
+      final next = drug.nextDoseTime;
+      if (next == null || !next.isAfter(now)) continue;
+
+      final id = _safeNotifyId(drug.id);
+      if (pendingIds.contains(id)) continue;
+
+      debugPrint('🔧 [TP-Debug] 启动自愈：补挂 ${drug.name} 的提醒 (id=$id)');
+      await scheduleMedicineReminder(drug);
+      restored++;
+    }
+
+    if (restored > 0) {
+      debugPrint('🔧 [TP-Debug] 启动自愈完成，共补挂 $restored 条提醒');
+    } else {
+      debugPrint('🔧 [TP-Debug] 启动自愈：无需补挂');
+    }
+    return restored;
   }
 }

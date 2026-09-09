@@ -23,6 +23,7 @@ import 'screens/wiki_tab.dart';
 import 'screens/workspace_tab.dart';
 import 'services/home_module_visibility.dart';
 import 'services/image_export_service.dart';
+import 'services/medication_service.dart';
 import 'services/resource_service.dart';
 import 'services/notification_service.dart';
 import 'services/update_service.dart';
@@ -736,6 +737,19 @@ class _AppRootControllerState extends State<AppRootController> {
     // 「隐私与权限」步骤，由用户明确点击「授权并继续」后触发，
     // 避免一打开 App 就弹出系统级权限索求。
     await NotificationService().initialize();
+    await _restoreMissingReminders();
+  }
+
+  /// 启动自愈：部分 OEM（HyperOS / MIUI 等）会在进程被清理或强停后移除
+  /// 已注册的系统闹钟，且不会回调 App；每次启动做一次对账，把丢失的
+  /// 用药提醒补挂回来。非致命失败只记日志。
+  Future<void> _restoreMissingReminders() async {
+    try {
+      final drugs = await MedicationService.loadAllDrugs();
+      await NotificationService().restoreMissingSchedules(drugs);
+    } catch (e) {
+      debugPrint('⚠️ [TP-Debug] 启动自愈失败(非致命): $e');
+    }
   }
 
   /// 初始化 JSON 驱动的资源服务并运行搜索测试
